@@ -1,0 +1,10 @@
+hadoop_ha_monitor:
+  dudu_hadoop:
+    zookeeper.server: 127.0.0.1:21818
+    ha.node.path: /hadoop-ha/ActiveBomb/active
+  xiaoran_hadoop:
+    zookeeper.server: 127.0.0.1:21818
+    ha.node.path: /hadoop-ha/ActiveBomb2/active
+#hadoop datanode
+hadoop_dn_monitor:
+  datanode: aaaaa

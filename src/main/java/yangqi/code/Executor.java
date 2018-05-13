@@ -6,13 +6,19 @@
 package yangqi.code;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
+import yangqi.utils.PropertiesUtil;
+
 
 /**
  * Executor maintains the ZooKeeper connection, and the class called the DataMonitor monitors the data in the ZooKeeper tree.
@@ -20,13 +26,19 @@ import org.apache.zookeeper.ZooKeeper;
  */
 public class Executor implements Watcher, Runnable, DataMonitorListener {
 
-    String      znode;
     DataMonitor dm;
     ZooKeeper   zk;
-    Process     child;
+    String desc;
+    String   znode;
+    boolean isFirst=true;
 
-    public Executor(String hostPort, String znode, String exec[]) throws KeeperException, IOException {
-        zk = new ZooKeeper(hostPort, 60000, this);
+    String DEFAULT_HA_NODE="/hadoop-ha/ActiveBomb/active";
+    static final String HADOOP_HA_CONFIG="hadoop_ha_monitor";
+
+    public Executor(String hostPort, String znode,String desc) throws KeeperException, IOException {
+        if(znode==null)znode=DEFAULT_HA_NODE;
+        this.desc=desc;
+        zk = new ZooKeeper(hostPort, 30000, this);
         dm = new DataMonitor(zk, znode, null, this);
     }
 
@@ -34,13 +46,19 @@ public class Executor implements Watcher, Runnable, DataMonitorListener {
      * @param args
      */
     public static void main(String[] args) {
-        args = new String[] { "localhost:2181", "/yangqi_test" };
-
-        String hostPort = "127.0.0.1:21818";
-        String znode = "/hadoop-ha/ActiveBomb/active";
-        String exec[] = new String[] { "date" };
+        Map config=PropertiesUtil.loadConfig(Executor.class.getResource("/monitor.yaml").getPath(), HashMap.class);
         try {
-            new Executor(hostPort, znode, exec).run();
+            ExecutorService service = Executors.newCachedThreadPool();
+            //hadoop-ha monitor
+            Set<Map.Entry<String,HashMap<String,String>>> hadoopConfig = ((Map) config.get(HADOOP_HA_CONFIG)).entrySet();
+           for (Map.Entry<String,HashMap<String,String>> hadoop:hadoopConfig) {
+              String desc= hadoop.getKey();
+              HashMap<String, String> value = hadoop.getValue();
+              String zkServer=value.get("zookeeper.server");
+              String haNodePath=value.get("ha.node.path");
+              service.execute(new Executor(zkServer,haNodePath,desc));
+           }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -55,86 +73,41 @@ public class Executor implements Watcher, Runnable, DataMonitorListener {
         dm.process(event);
     }
 
+    /**
+     * the main thread long run
+     */
     public void run() {
         try {
             synchronized (this) {
                 while (!dm.dead) {
-                    System.out.println("===========EXECUTOR START TO WAIT===========");
+                    System.out.println(String.format("===========%s EXECUTOR START TO WAIT===========",desc));
                     wait();
-                    System.out.println("===========EXECUTOR STOP WAIT===========");
+                    System.out.println(String.format("===========%s EXECUTOR STOP WAIT===========",desc));
                 }
             }
         } catch (InterruptedException e) {
         }
     }
 
-    public void closing(int rc) {
+    public void closingExtra(int rc) {
         synchronized (this) {
-            System.out.println("===========EXECUTOR START TO NOTIFY ALL===========");
             notifyAll();
-            System.out.println("===========EXECUTOR START TO NOTIFY ALL===========");
         }
     }
 
-    static class StreamWriter extends Thread {
 
-        OutputStream os;
-
-        InputStream  is;
-
-        StreamWriter(InputStream is, OutputStream os) {
-            this.is = is;
-            this.os = os;
-            start();
-        }
-
-        public void run() {
-            byte b[] = new byte[80];
-            int rc;
-            try {
-                System.out.println("===========START TO WRITE===========");
-                while ((rc = is.read(b)) > 0) {
-                    os.write(b, 0, rc);
-                }
-                System.out.println("===========STOP TO WRITE===========");
-            } catch (IOException e) {
-            }
-
-        }
-    }
-
-    public void exists(byte[] data) {
+    public void existsExtra(byte[] data) {
         if (data == null) {
-            if (child != null) {
-                System.out.println("Killing process");
-                child.destroy();
-                try {
-                    child.waitFor();
-                } catch (InterruptedException e) {
-                }
-            }
-            child = null;
+            // TODO send msg: no active namenode alive
         } else {
-            if (child != null) {
-                System.out.println("Stopping child");
-                child.destroy();
-                try {
-                    child.waitFor();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+            String con=new String(data);
+            if(isFirst){
+                // TODO send msg
+                System.out.println(String.format("monitor %s-namenode-ha acitive node  started,active namenode:%s",desc,con));
+                return;
             }
-            System.out.println("===SHOW DATA===");
-            System.out.println(new String(data));
-            try {
-                System.out.println("Starting child");
-                child = Runtime.getRuntime().exec("");
-                //TODO send msg
-                new StreamWriter(child.getInputStream(), System.out);
-                new StreamWriter(child.getErrorStream(), System.err);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            //TODO send msg　: namenoce switch
+            System.out.println(String.format("%s-namenoce switch  started,active namenode:%s",desc,con));
         }
     }
 }

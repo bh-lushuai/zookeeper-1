@@ -60,7 +60,8 @@ public class DataMonitor implements Watcher, StatCallback {
                 case Expired:
                     // It's all over
                     dead = true;
-                    listener.closing(KeeperException.Code.SessionExpired);
+                    listener.closingExtra(KeeperException.Code.SessionExpired);
+                    //TODO alter msgï¼šã€€monitor hadoop-ha app connect-zk session was lost
                     break;
                 case AuthFailed:
                     break;
@@ -94,20 +95,19 @@ public class DataMonitor implements Watcher, StatCallback {
         System.out.println("STAT CALL BACK");
         System.out.println("rc " + rc);
         System.out.println("path " + path);
-        System.out.println("ctx " + ctx);
         System.out.println("stat " + stat);
         switch (rc) {
             case Code.Ok:
                 exists = true;
                 break;
             case Code.NoNode:
-                // É¾³ý½áµãµÄÊ±ºò
+                // É¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
                 exists = false;
                 break;
             case Code.SessionExpired:
             case Code.NoAuth:
                 dead = true;
-                listener.closing(rc);
+                listener.closingExtra(rc);
                 return;
             default:
                 // Retry errors
@@ -130,7 +130,7 @@ public class DataMonitor implements Watcher, StatCallback {
             System.out.println("GET DATA END ");
         }
         if ((b == null && b != prevData) || (b != null && !Arrays.equals(prevData, b))) {
-            listener.exists(b);
+            listener.existsExtra(b);
             prevData = b;
         }
     }
