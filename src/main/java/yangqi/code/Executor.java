@@ -15,26 +15,18 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 
 /**
- * ¿‡Executor.javaµƒ µœ÷√Ë ˆ£∫TODO ¿‡ µœ÷√Ë ˆ
- * 
- * @author yangqi 2013-5-30 œ¬ŒÁ10:48:09
+ * Executor maintains the ZooKeeper connection, and the class called the DataMonitor monitors the data in the ZooKeeper tree.
+ * Also, Executor contains the main thread and contains the execution logicÔºàDataMonitorListenerÔºâ
  */
-
 public class Executor implements Watcher, Runnable, DataMonitorListener {
 
     String      znode;
-
     DataMonitor dm;
-
     ZooKeeper   zk;
-
-    String      exec[];
-
     Process     child;
 
     public Executor(String hostPort, String znode, String exec[]) throws KeeperException, IOException {
-        this.exec = exec;
-        zk = new ZooKeeper(hostPort, 3000, this);
+        zk = new ZooKeeper(hostPort, 60000, this);
         dm = new DataMonitor(zk, znode, null, this);
     }
 
@@ -44,8 +36,8 @@ public class Executor implements Watcher, Runnable, DataMonitorListener {
     public static void main(String[] args) {
         args = new String[] { "localhost:2181", "/yangqi_test" };
 
-        String hostPort = args[0];
-        String znode = args[1];
+        String hostPort = "127.0.0.1:21818";
+        String znode = "/hadoop-ha/ActiveBomb/active";
         String exec[] = new String[] { "date" };
         try {
             new Executor(hostPort, znode, exec).run();
@@ -57,7 +49,7 @@ public class Executor implements Watcher, Runnable, DataMonitorListener {
     /***************************************************************************
      * We do process any events ourselves, we just need to forward them on.
      * 
-     * @see org.apache.zookeeper.Watcher#process(org.apache.zookeeper.proto.WatcherEvent)
+     * @see org.apache.zookeeper.Watcher#(org.apache.zookeeper.proto.WatcherEvent)
      */
     public void process(WatchedEvent event) {
         dm.process(event);
@@ -136,7 +128,8 @@ public class Executor implements Watcher, Runnable, DataMonitorListener {
             System.out.println(new String(data));
             try {
                 System.out.println("Starting child");
-                child = Runtime.getRuntime().exec(exec);
+                child = Runtime.getRuntime().exec("");
+                //TODO send msg
                 new StreamWriter(child.getInputStream(), System.out);
                 new StreamWriter(child.getErrorStream(), System.err);
             } catch (IOException e) {
